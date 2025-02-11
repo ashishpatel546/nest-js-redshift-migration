@@ -6,11 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "jest",
-    "mg:create": "node ./dist/scripts/create-migration.js"
-  },
-  "bin": {
-    "create-migration": "./dist/scripts/create-migration.js"
+    "test": "jest"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.3",
