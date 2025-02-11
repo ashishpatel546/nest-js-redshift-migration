@@ -17,4 +17,5 @@ Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./migration.module"), exports);
 __exportStar(require("./migration.service"), exports);
 __exportStar(require("./interfaces/migration-options.interface"), exports);
+__exportStar(require("./migration.controller"), exports);
 //# sourceMappingURL=index.js.map

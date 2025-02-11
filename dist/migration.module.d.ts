@@ -7,6 +7,7 @@ interface MigrationExistingConnectionAsyncOptions {
     connectionName: string;
     useFactory: (...args: any[]) => Promise<Omit<MigrationExistingConnectionOptions, 'connectionName'>> | Omit<MigrationExistingConnectionOptions, 'connectionName'>;
     isGlobal?: boolean;
+    exposeApi?: boolean;
 }
 export declare class MigrationModule {
     static forExistingConnection(options: MigrationExistingConnectionOptions): DynamicModule;
