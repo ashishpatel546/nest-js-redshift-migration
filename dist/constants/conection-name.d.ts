@@ -1,0 +1,1 @@
+export declare const REDSHIFT_DATASOURCE = "REDSHIFT_DATASOURCE";
