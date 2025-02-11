@@ -1,4 +1,3 @@
-
 /**
  * Base configuration options for the Migration module
  */
@@ -14,6 +13,7 @@ export interface MigrationModuleOptions {
     awsS3Region: string;
     awsS3Bucket: string;
   };
+  exposeApi?: boolean; // Add this new option
 }
 
 /**

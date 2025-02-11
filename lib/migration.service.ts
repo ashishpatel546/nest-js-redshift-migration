@@ -1,10 +1,5 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  OnModuleInit,
-} from '@nestjs/common';
-import { DataSource, QueryRunner } from 'typeorm';
+import { Inject, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { DataSource, Not, QueryRunner } from 'typeorm';
 import fs from 'fs';
 import { readdir } from 'fs/promises';
 import path from 'path';
@@ -14,6 +9,7 @@ import { REDSHIFT_DATASOURCE } from './constants/conection-name';
 import { StatusOptions } from './constants/status';
 import { S3Service } from '@sologence/nest-js-aws-s3';
 import moment from 'moment';
+import { MigrationDto } from './dto/migration.dto';
 
 /**
  * Service responsible for handling database migrations
@@ -26,12 +22,13 @@ export class MigrationService implements OnModuleInit {
   private readonly uploadPath = `MigrationFile`;
   private readonly migrationFolderName = this.options.migrationFolderName;
   private s3: S3Service;
+  private readonly migrationDirKey = `${this.migration_dir_key_prefix}_${this.migrationFolderName}`;
 
   constructor(
     @Inject('MIGRATION_OPTIONS')
     private readonly options: MigrationModuleOptions,
     @Inject(REDSHIFT_DATASOURCE)
-    private readonly dataSource: DataSource,
+    private readonly dataSource: DataSource
   ) {
     if (options.useS3 && options.s3ModuleOptions) {
       this.logger.debug('Using AWS S3 to upload the migration files');
@@ -78,8 +75,10 @@ export class MigrationService implements OnModuleInit {
       WHERE migration_dir_key = $1 
       ORDER BY timestamp DESC 
       LIMIT 1`;
-      
-      const lastMigration = await this.dataSource.query(query, [migrationDirKey]);
+
+      const lastMigration = await this.dataSource.query(query, [
+        migrationDirKey,
+      ]);
       return lastMigration[0];
     } catch (error) {
       this.logger.warn(
@@ -140,7 +139,6 @@ export class MigrationService implements OnModuleInit {
   ) {
     const migrationDirKey = `${this.migration_dir_key_prefix}_${migrationDir}`;
     try {
-
       //code comented to remove the id from migration history table
       // const maxId = await this.dataSource
       //   .createQueryBuilder()
@@ -151,7 +149,6 @@ export class MigrationService implements OnModuleInit {
       //   .then(result => result.max);
       // const newId = maxId ? parseInt(maxId) + 1 : 1;
 
-
       const newEntry: MigrationHistory = {
         // id: newId,
         created_on: new Date(),
@@ -159,11 +156,12 @@ export class MigrationService implements OnModuleInit {
         timestamp: timestamp,
         migration_dir_key: migrationDirKey,
       };
-      await this.dataSource.createQueryBuilder()
-      .insert()
-      .into('migration_history')
-      .values(newEntry)
-      .execute();
+      await this.dataSource
+        .createQueryBuilder()
+        .insert()
+        .into('migration_history')
+        .values(newEntry)
+        .execute();
 
       this.logger.log(`Migration track updated successfully for ${fileName}`);
       return {
@@ -199,7 +197,7 @@ export class MigrationService implements OnModuleInit {
 
   private async assureMigrationTrackingExist() {
     try {
-        await this.createMigrationTableIfNotExists();
+      await this.createMigrationTableIfNotExists();
     } catch (error) {
       this.logger.log(error.message);
       return null;
@@ -224,11 +222,9 @@ export class MigrationService implements OnModuleInit {
 
     //! if nest js application is not dockerized then we need to replace js with ts as it handles the issue that inside docket it created files under dist folder in some cases, so we can handle is with isDockerized flag
     const needToReplace = this.checkSrcFolderExistsInDist();
-    const jsFolderPath = needToReplace ? basePath : basePath.replace('js', 'ts');
-    // const jsFolderPath =
-    //   this.options.isDockerized !== true
-    //     ? basePath.replace('dist/src', 'dist')
-    //     : basePath;
+    const jsFolderPath = needToReplace
+      ? basePath
+      : basePath.replace('js', 'ts');
     const tsFolderPath = basePath.replace('js', 'ts').replace('/dist', '');
     return {
       jsFolderPath,
@@ -238,7 +234,7 @@ export class MigrationService implements OnModuleInit {
 
   private async runMigration(
     migrationFiles: string[],
-    migrationFolder: string
+    migrationFolderName: string,
   ) {
     if (!migrationFiles || migrationFiles.length === 0) {
       this.logger.log(
@@ -248,7 +244,11 @@ export class MigrationService implements OnModuleInit {
     }
 
     const queryRunner = this.getQueryRunner();
-    const { jsFolderPath, tsFolderPath } = this.getFilePaths(migrationFolder);
+    const { jsFolderPath, tsFolderPath } = this.getFilePaths(migrationFolderName);
+    if(!jsFolderPath || !tsFolderPath) {
+      this.logger.error(`Migration file not found in folder: ${migrationFolderName}`);
+      return;
+    }
     await this.assureMigrationTrackingExist();
     try {
       for (const migration of migrationFiles) {
@@ -274,9 +274,9 @@ export class MigrationService implements OnModuleInit {
             if (typeof migrationInstance.up === 'function') {
               await migrationInstance.up(queryRunner);
               this.logger.log(`Successfully ran migration: ${className}`);
-
+              
               const dbRes = await this.updateMigrationHistory(
-                migrationFolder,
+                migrationFolderName,
                 migration,
                 timestamp
               );
@@ -331,7 +331,7 @@ export class MigrationService implements OnModuleInit {
     // for (const migrationFolder of this.migrationFolders) {
     const migrationFolderName = this.migrationFolderName;
     const migrationFiles = await this.readMigrationFile(migrationFolderName);
-    await this.runMigration(migrationFiles, migrationFolderName);
+    await this.runMigration(migrationFiles, this.migrationFolderName);
     // }
 
     return {
@@ -355,6 +355,10 @@ export class MigrationService implements OnModuleInit {
     const queryRunner = this.dataSource.createQueryRunner();
     let currentQueryRunner: QueryRunner = queryRunner;
     const { jsFolderPath, tsFolderPath } = this.getFilePaths(migrationFolder);
+    if(!jsFolderPath || !tsFolderPath) {
+      this.logger.error(`Migration file not found in folder: ${migrationFolder}`);
+      return;
+    }
     const timestamp = parseInt(migration.split('-')[0], 10);
     const className = `Migration${timestamp}`;
     try {
@@ -387,7 +391,8 @@ export class MigrationService implements OnModuleInit {
         if (typeof migrationInstance.up === 'function') {
           await migrationInstance.down(currentQueryRunner);
           this.logger.log(`Successfully reverted migration: ${className}`);
-          const dbRes = await this.deleteFromMigrationHistory(migration);
+          const migDirKey = `${this.migration_dir_key_prefix}_${migrationFolder}`;
+          const dbRes = await this.deleteFromMigrationHistory(migration, migDirKey);
           if (dbRes?.msg === StatusOptions.SUCCESS)
             this.logger.log(`Migration track record deleted successfully`);
           else
@@ -404,7 +409,7 @@ export class MigrationService implements OnModuleInit {
     }
   }
 
-  private async deleteFromMigrationHistory(migraion: string) {
+  private async deleteFromMigrationHistory(migraion: string, migDirKey: string) {
     if (!migraion || migraion.length === 0) {
       this.logger.log(
         `No migration file name found to delete from migration track.`
@@ -414,17 +419,17 @@ export class MigrationService implements OnModuleInit {
     this.logger.log(
       `Deleting record from migration tracking for migration name: ${migraion}`
     );
-    this.logger.log(`Checking for existance of migration_history`);
-    const isMigrationTrackingExist = await this.assureMigrationTrackingExist();
-    if (!isMigrationTrackingExist) {
-      this.logger.log(`No Migration Tracking cube exist.`);
-      return {
-        msg: StatusOptions.FAIL,
-      };
-    }
+    // this.logger.log(`Checking for existance of migration_history`);
+    // const isMigrationTrackingExist = await this.assureMigrationTrackingExist();
+    // if (!isMigrationTrackingExist) {
+    //   this.logger.log(`No Migration Tracking cube exist.`);
+    //   return {
+    //     msg: StatusOptions.FAIL,
+    //   };
+    // }
 
-    const query = `DELETE FROM migration_history WHERE migration_file_name = $1;`;
-    const params = [migraion];
+    const query = `DELETE FROM migration_history WHERE migration_file_name = $1 AND migration_dir_key = $2;`;
+    const params = [migraion, migDirKey];
     try {
       await this.dataSource.query(query, params);
       this.logger.log(
@@ -460,18 +465,52 @@ export class MigrationService implements OnModuleInit {
     };
   }
 
+  async runSpecificMigration(migrationDto: MigrationDto) {
+    const { migration_file_name, migration_folder_name } = migrationDto;
+    if (!migration_file_name) {
+      throw new Error('Migration file name is required');
+    }
+
+    const migrationFiles = [migration_file_name];
+
+    await this.runMigration(migrationFiles, migration_folder_name);
+    return {
+      msg: StatusOptions.SUCCESS,
+      description: `Migration ${migration_file_name} executed successfully`,
+    };
+  }
+
+  async revertSpecificMigration(migrationDto: MigrationDto) {
+    const { migration_file_name, migration_folder_name } = migrationDto;
+    if (!migration_file_name) {
+      throw new Error('Migration file name is required');
+    }
+
+    const migrationFolder = migration_folder_name || this.migrationFolderName;
+    await this.runRevertMigraion(migration_file_name, migrationFolder);
+    return {
+      msg: StatusOptions.SUCCESS,
+      description: `Migration ${migration_file_name} reverted successfully`,
+    };
+  }
+
+ 
+
   /**
    * Lifecycle hook that runs when module is initialized
    */
-   onModuleInit() {
+  async onModuleInit() {
     if (this.options.runOnStartUp !== true) {
-        this.logger.log(`Migration run on startup is disabled.`);
-        return;
-      }
-      this.logger.warn(`Running pending migrations`);
-      this.triggerMigration().then(()=> this.logger.warn(
-        `All pending migrations done and migration tracking updated successfully`
-      )).catch((err)=> this.logger.error(err));
-      
+      this.logger.log(`Migration run on startup is disabled.`);
+      return;
+    }
+    this.logger.warn(`Running pending migrations`);
+    this.triggerMigration()
+      .then(() =>
+        this.logger.warn(
+          `All pending migrations done and migration tracking updated successfully`
+        )
+      )
+      .catch((err) => this.logger.error(err));
   }
 }

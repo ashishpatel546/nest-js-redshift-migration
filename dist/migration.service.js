@@ -34,6 +34,7 @@ let MigrationService = MigrationService_1 = class MigrationService {
         this.migration_dir_key_prefix = this.options.migration_dir_key_prefix;
         this.uploadPath = `MigrationFile`;
         this.migrationFolderName = this.options.migrationFolderName;
+        this.migrationDirKey = `${this.migration_dir_key_prefix}_${this.migrationFolderName}`;
         if (options.useS3 && options.s3ModuleOptions) {
             this.logger.debug('Using AWS S3 to upload the migration files');
             this.logger.debug('Initializing S3 client for Migration service');
@@ -65,7 +66,9 @@ let MigrationService = MigrationService_1 = class MigrationService {
       WHERE migration_dir_key = $1 
       ORDER BY timestamp DESC 
       LIMIT 1`;
-            const lastMigration = await this.dataSource.query(query, [migrationDirKey]);
+            const lastMigration = await this.dataSource.query(query, [
+                migrationDirKey,
+            ]);
             return lastMigration[0];
         }
         catch (error) {
@@ -105,7 +108,8 @@ let MigrationService = MigrationService_1 = class MigrationService {
                 timestamp: timestamp,
                 migration_dir_key: migrationDirKey,
             };
-            await this.dataSource.createQueryBuilder()
+            await this.dataSource
+                .createQueryBuilder()
                 .insert()
                 .into('migration_history')
                 .values(newEntry)
@@ -161,20 +165,26 @@ let MigrationService = MigrationService_1 = class MigrationService {
         const cwd = process.cwd();
         let basePath = path_1.default.join(cwd, 'dist', 'src', filePath);
         const needToReplace = this.checkSrcFolderExistsInDist();
-        const jsFolderPath = needToReplace ? basePath : basePath.replace('js', 'ts');
+        const jsFolderPath = needToReplace
+            ? basePath
+            : basePath.replace('js', 'ts');
         const tsFolderPath = basePath.replace('js', 'ts').replace('/dist', '');
         return {
             jsFolderPath,
             tsFolderPath,
         };
     }
-    async runMigration(migrationFiles, migrationFolder) {
+    async runMigration(migrationFiles, migrationFolderName) {
         if (!migrationFiles || migrationFiles.length === 0) {
             this.logger.log(`No migration to run at ${(0, moment_1.default)().format('YYYY-MM-DD HH:mm:ss')}`);
             return;
         }
         const queryRunner = this.getQueryRunner();
-        const { jsFolderPath, tsFolderPath } = this.getFilePaths(migrationFolder);
+        const { jsFolderPath, tsFolderPath } = this.getFilePaths(migrationFolderName);
+        if (!jsFolderPath || !tsFolderPath) {
+            this.logger.error(`Migration file not found in folder: ${migrationFolderName}`);
+            return;
+        }
         await this.assureMigrationTrackingExist();
         try {
             for (const migration of migrationFiles) {
@@ -191,7 +201,7 @@ let MigrationService = MigrationService_1 = class MigrationService {
                         if (typeof migrationInstance.up === 'function') {
                             await migrationInstance.up(queryRunner);
                             this.logger.log(`Successfully ran migration: ${className}`);
-                            const dbRes = await this.updateMigrationHistory(migrationFolder, migration, timestamp);
+                            const dbRes = await this.updateMigrationHistory(migrationFolderName, migration, timestamp);
                             if (dbRes.msg === status_1.StatusOptions.SUCCESS) {
                                 if (this.options.useS3) {
                                     const status = await this.uploadMigraionFileOnS3(migration, tsMigrationFilePath);
@@ -236,7 +246,7 @@ let MigrationService = MigrationService_1 = class MigrationService {
     async triggerMigration() {
         const migrationFolderName = this.migrationFolderName;
         const migrationFiles = await this.readMigrationFile(migrationFolderName);
-        await this.runMigration(migrationFiles, migrationFolderName);
+        await this.runMigration(migrationFiles, this.migrationFolderName);
         return {
             msg: status_1.StatusOptions.SUCCESS,
         };
@@ -257,6 +267,10 @@ let MigrationService = MigrationService_1 = class MigrationService {
         const queryRunner = this.dataSource.createQueryRunner();
         let currentQueryRunner = queryRunner;
         const { jsFolderPath, tsFolderPath } = this.getFilePaths(migrationFolder);
+        if (!jsFolderPath || !tsFolderPath) {
+            this.logger.error(`Migration file not found in folder: ${migrationFolder}`);
+            return;
+        }
         const timestamp = parseInt(migration.split('-')[0], 10);
         const className = `Migration${timestamp}`;
         try {
@@ -275,7 +289,8 @@ let MigrationService = MigrationService_1 = class MigrationService {
                 if (typeof migrationInstance.up === 'function') {
                     await migrationInstance.down(currentQueryRunner);
                     this.logger.log(`Successfully reverted migration: ${className}`);
-                    const dbRes = await this.deleteFromMigrationHistory(migration);
+                    const migDirKey = `${this.migration_dir_key_prefix}_${migrationFolder}`;
+                    const dbRes = await this.deleteFromMigrationHistory(migration, migDirKey);
                     if ((dbRes === null || dbRes === void 0 ? void 0 : dbRes.msg) === status_1.StatusOptions.SUCCESS)
                         this.logger.log(`Migration track record deleted successfully`);
                     else
@@ -291,22 +306,14 @@ let MigrationService = MigrationService_1 = class MigrationService {
             this.logger.error(`Failed to revert migration ${className}`);
         }
     }
-    async deleteFromMigrationHistory(migraion) {
+    async deleteFromMigrationHistory(migraion, migDirKey) {
         if (!migraion || migraion.length === 0) {
             this.logger.log(`No migration file name found to delete from migration track.`);
             return;
         }
         this.logger.log(`Deleting record from migration tracking for migration name: ${migraion}`);
-        this.logger.log(`Checking for existance of migration_history`);
-        const isMigrationTrackingExist = await this.assureMigrationTrackingExist();
-        if (!isMigrationTrackingExist) {
-            this.logger.log(`No Migration Tracking cube exist.`);
-            return {
-                msg: status_1.StatusOptions.FAIL,
-            };
-        }
-        const query = `DELETE FROM migration_history WHERE migration_file_name = $1;`;
-        const params = [migraion];
+        const query = `DELETE FROM migration_history WHERE migration_file_name = $1 AND migration_dir_key = $2;`;
+        const params = [migraion, migDirKey];
         try {
             await this.dataSource.query(query, params);
             this.logger.log(`Migration tracking updated successfully, record deleted for migration: ${migraion}`);
@@ -332,13 +339,39 @@ let MigrationService = MigrationService_1 = class MigrationService {
             description: 'Request recieved. check logs for more details.',
         };
     }
-    onModuleInit() {
+    async runSpecificMigration(migrationDto) {
+        const { migration_file_name, migration_folder_name } = migrationDto;
+        if (!migration_file_name) {
+            throw new Error('Migration file name is required');
+        }
+        const migrationFiles = [migration_file_name];
+        await this.runMigration(migrationFiles, migration_folder_name);
+        return {
+            msg: status_1.StatusOptions.SUCCESS,
+            description: `Migration ${migration_file_name} executed successfully`,
+        };
+    }
+    async revertSpecificMigration(migrationDto) {
+        const { migration_file_name, migration_folder_name } = migrationDto;
+        if (!migration_file_name) {
+            throw new Error('Migration file name is required');
+        }
+        const migrationFolder = migration_folder_name || this.migrationFolderName;
+        await this.runRevertMigraion(migration_file_name, migrationFolder);
+        return {
+            msg: status_1.StatusOptions.SUCCESS,
+            description: `Migration ${migration_file_name} reverted successfully`,
+        };
+    }
+    async onModuleInit() {
         if (this.options.runOnStartUp !== true) {
             this.logger.log(`Migration run on startup is disabled.`);
             return;
         }
         this.logger.warn(`Running pending migrations`);
-        this.triggerMigration().then(() => this.logger.warn(`All pending migrations done and migration tracking updated successfully`)).catch((err) => this.logger.error(err));
+        this.triggerMigration()
+            .then(() => this.logger.warn(`All pending migrations done and migration tracking updated successfully`))
+            .catch((err) => this.logger.error(err));
     }
 };
 MigrationService = MigrationService_1 = __decorate([

@@ -2,6 +2,7 @@ import { OnModuleInit } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { MigrationModuleOptions } from './interfaces/migration-options.interface';
 import { StatusOptions } from './constants/status';
+import { MigrationDto } from './dto/migration.dto';
 export declare class MigrationService implements OnModuleInit {
     private readonly options;
     private readonly dataSource;
@@ -10,6 +11,7 @@ export declare class MigrationService implements OnModuleInit {
     private readonly uploadPath;
     private readonly migrationFolderName;
     private s3;
+    private readonly migrationDirKey;
     constructor(options: MigrationModuleOptions, dataSource: DataSource);
     private createMigrationTableIfNotExists;
     private getQueryRunner;
@@ -32,5 +34,13 @@ export declare class MigrationService implements OnModuleInit {
         msg: StatusOptions;
         description: string;
     }>;
-    onModuleInit(): void;
+    runSpecificMigration(migrationDto: MigrationDto): Promise<{
+        msg: StatusOptions;
+        description: string;
+    }>;
+    revertSpecificMigration(migrationDto: MigrationDto): Promise<{
+        msg: StatusOptions;
+        description: string;
+    }>;
+    onModuleInit(): Promise<void>;
 }

@@ -171,4 +171,47 @@ CREATE TABLE IF NOT EXISTS migration_history (
    - Can revert specific migrations when needed
    - Automatically updates migration_history after rollback
 
+## API Endpoints
+
+When you enable the API by setting `exposeApi: true` in your module configuration, the following endpoints become available:
+
+### Available Endpoints
+
+| Method | Endpoint                 | Description                | Request Body |
+| ------ | ------------------------ | -------------------------- | ------------ |
+| POST   | /migrations/run          | Run all pending migrations | None         |
+| POST   | /migrations/run-specific | Run a specific migration   | ```json      |
+
+{
+"migration_file_name": "1738657155856-migration.ts",
+"migration_folder_name": "migrations"
+}
+
+````|
+| POST   | /migrations/revert | Revert a specific migration | ```json
+{
+  "migration_file_name": "1738657155856-migration.ts",
+  "migration_folder_name": "migrations"
+}
+``` |
+
+To enable the API endpoints, update your module configuration:
+
+```typescript
+MigrationModule.forExistingConnection({
+  // ...other options...
+  exposeApi: true, // Enable API endpoints
+});
+
+// Or for async configuration
+MigrationModule.forExistingConnectionAsync({
+  // ...other options...
+  exposeApi: true, // Enable API endpoints
+});
+````
+
+### Swagger Documentation
+
+The API endpoints are automatically documented using Swagger. Access the Swagger UI at `/api` when your application is running to test the endpoints interactively.
+
 // ...rest of existing code...

@@ -12,24 +12,35 @@ const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const migration_service_1 = require("./migration.service");
 const conection_name_1 = require("./constants/conection-name");
+const migration_controller_1 = require("./migration.controller");
+const core_1 = require("@nestjs/core");
 let MigrationModule = MigrationModule_1 = class MigrationModule {
     static forExistingConnection(options) {
+        const providers = [
+            {
+                provide: 'MIGRATION_OPTIONS',
+                useValue: options,
+            },
+            {
+                provide: conection_name_1.REDSHIFT_DATASOURCE,
+                useFactory: (dataSource) => dataSource,
+                inject: [(0, typeorm_1.getDataSourceToken)(options.connectionName)],
+            },
+            migration_service_1.MigrationService,
+            {
+                provide: core_1.APP_PIPE,
+                useValue: new common_1.ValidationPipe({
+                    transform: true,
+                    whitelist: true,
+                }),
+            },
+        ];
         return {
             global: options.isGlobal,
             module: MigrationModule_1,
-            providers: [
-                {
-                    provide: 'MIGRATION_OPTIONS',
-                    useValue: Object.assign(Object.assign({}, options), { typeormConfig: undefined }),
-                },
-                {
-                    provide: conection_name_1.REDSHIFT_DATASOURCE,
-                    useFactory: (dataSource) => dataSource,
-                    inject: [(0, typeorm_1.getDataSourceToken)(options.connectionName)],
-                },
-                migration_service_1.MigrationService,
-            ],
+            providers,
             exports: [migration_service_1.MigrationService],
+            controllers: options.exposeApi ? [migration_controller_1.MigrationController] : [],
         };
     }
     static async getConnectionToken(options) {
@@ -39,27 +50,36 @@ let MigrationModule = MigrationModule_1 = class MigrationModule {
         return (0, typeorm_1.getDataSourceToken)(options.connectionName);
     }
     static forExistingConnectionAsync(options) {
+        const providers = [
+            {
+                provide: 'MIGRATION_OPTIONS',
+                useFactory: async (...args) => {
+                    const config = await options.useFactory(...args);
+                    return Object.assign(Object.assign({}, config), { connectionName: options.connectionName });
+                },
+                inject: options.inject || [],
+            },
+            {
+                provide: conection_name_1.REDSHIFT_DATASOURCE,
+                useFactory: (dataSource) => dataSource,
+                inject: [(0, typeorm_1.getDataSourceToken)(options.connectionName)],
+            },
+            migration_service_1.MigrationService,
+            {
+                provide: core_1.APP_PIPE,
+                useValue: new common_1.ValidationPipe({
+                    transform: true,
+                    whitelist: true,
+                }),
+            },
+        ];
         return {
             global: options.isGlobal,
             module: MigrationModule_1,
             imports: [...(options.imports || [])],
-            providers: [
-                {
-                    provide: 'MIGRATION_OPTIONS',
-                    useFactory: async (...args) => {
-                        const config = await options.useFactory(...args);
-                        return Object.assign(Object.assign({}, config), { connectionName: options.connectionName, typeormConfig: undefined });
-                    },
-                    inject: options.inject || [],
-                },
-                {
-                    provide: conection_name_1.REDSHIFT_DATASOURCE,
-                    useFactory: (dataSource) => dataSource,
-                    inject: [(0, typeorm_1.getDataSourceToken)(options.connectionName)],
-                },
-                migration_service_1.MigrationService,
-            ],
+            providers,
             exports: [migration_service_1.MigrationService],
+            controllers: options.exposeApi ? [migration_controller_1.MigrationController] : [],
         };
     }
 };
