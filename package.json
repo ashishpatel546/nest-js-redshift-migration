@@ -1,6 +1,6 @@
 {
   "name": "@sologence/nestjs-redshift-migration",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "NestJS migration module for Redshift data migration",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
