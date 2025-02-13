@@ -217,7 +217,7 @@ export class MigrationService implements OnModuleInit {
       const distSrcPath = path.join(cwd, 'dist', 'src');
       const isExist = fs.existsSync(distSrcPath);
       this.logger.debug(`Src folder in dist exist: ${isExist}`);
-      return isExist
+      return isExist;
     } catch (error) {
       this.logger.error('Error checking src folder in dist:', error.message);
       return false;
@@ -227,23 +227,28 @@ export class MigrationService implements OnModuleInit {
   private getMigrationFolderPath(migFolderName: string) {
     const cwd = process.cwd();
     try {
-    let distFolderPath = path.join(cwd, 'dist');
+      let distFolderPath = path.join(cwd, 'dist');
 
-    //! if nest js application is not dockerized then we need to replace js with ts as it handles the issue that inside docket it created files under dist folder in some cases, so we can handle is with isDockerized flag
-    const needToAddSrcPath = this.checkSrcFolderExistsInDist();
-    const finaldistFolderPath = needToAddSrcPath
-      ? path.join(distFolderPath, 'src')
-      : path.join(distFolderPath, migFolderName);
-    distFolderPath = finaldistFolderPath;
-    this.logger.debug(`dist folder path: ${distFolderPath}`);
-    const jsFolderPath = path.join(distFolderPath, migFolderName);
-    this.logger.debug(`Migration folder path for js files: ${jsFolderPath}`);
-    const tsFolderPath = jsFolderPath.replace('js', 'ts').replace('/dist', '');
-    this.logger.debug(`Migration foler path for ts files : ${tsFolderPath}`);
-    return {
-      jsFolderPath,
-      tsFolderPath,
-    };
+      //! if nest js application is not dockerized then we need to replace js with ts as it handles the issue that inside docket it created files under dist folder in some cases, so we can handle is with isDockerized flag
+      const needToAddSrcPath = this.checkSrcFolderExistsInDist();
+      if (needToAddSrcPath) {
+        distFolderPath = path.join(distFolderPath, 'src');
+      }
+      // const finaldistFolderPath = needToAddSrcPath
+      //   ? path.join(distFolderPath, 'src')
+      //   : distFolderPath;
+      // distFolderPath = finaldistFolderPath;
+      this.logger.debug(`dist folder path: ${distFolderPath}`);
+      const jsFolderPath = path.join(distFolderPath, migFolderName);
+      this.logger.debug(`Migration folder path for js files: ${jsFolderPath}`);
+      const tsFolderPath = jsFolderPath
+        .replace('js', 'ts')
+        .replace('/dist', '');
+      this.logger.debug(`Migration foler path for ts files : ${tsFolderPath}`);
+      return {
+        jsFolderPath,
+        tsFolderPath,
+      };
     } catch (error) {
       this.logger.error('Error getting file paths:', error.message);
       return {
@@ -379,7 +384,8 @@ export class MigrationService implements OnModuleInit {
     }
     const queryRunner = this.dataSource.createQueryRunner();
     let currentQueryRunner: QueryRunner = queryRunner;
-    const { jsFolderPath, tsFolderPath } = this.getMigrationFolderPath(migrationFolder);
+    const { jsFolderPath, tsFolderPath } =
+      this.getMigrationFolderPath(migrationFolder);
     if (!jsFolderPath || !tsFolderPath) {
       this.logger.error(
         `Migration file not found in folder: ${migrationFolder}`
