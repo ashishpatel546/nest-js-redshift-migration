@@ -154,25 +154,41 @@ let MigrationService = MigrationService_1 = class MigrationService {
         try {
             const cwd = process.cwd();
             const distSrcPath = path_1.default.join(cwd, 'dist', 'src');
-            return fs_1.default.existsSync(distSrcPath);
+            const isExist = fs_1.default.existsSync(distSrcPath);
+            this.logger.debug(`Src folder in dist exist: ${isExist}`);
+            return isExist;
         }
         catch (error) {
             this.logger.error('Error checking src folder in dist:', error.message);
             return false;
         }
     }
-    getFilePaths(filePath) {
+    getMigrationFolderPath(migFolderName) {
         const cwd = process.cwd();
-        let basePath = path_1.default.join(cwd, 'dist', 'src', filePath);
-        const needToReplace = this.checkSrcFolderExistsInDist();
-        const jsFolderPath = needToReplace
-            ? basePath
-            : basePath.replace('js', 'ts');
-        const tsFolderPath = basePath.replace('js', 'ts').replace('/dist', '');
-        return {
-            jsFolderPath,
-            tsFolderPath,
-        };
+        try {
+            let distFolderPath = path_1.default.join(cwd, 'dist');
+            const needToAddSrcPath = this.checkSrcFolderExistsInDist();
+            const finaldistFolderPath = needToAddSrcPath
+                ? path_1.default.join(distFolderPath, 'src')
+                : path_1.default.join(distFolderPath, migFolderName);
+            distFolderPath = finaldistFolderPath;
+            this.logger.debug(`dist folder path: ${distFolderPath}`);
+            const jsFolderPath = path_1.default.join(distFolderPath, migFolderName);
+            this.logger.debug(`Migration folder path js files: ${jsFolderPath}`);
+            const tsFolderPath = jsFolderPath.replace('js', 'ts').replace('/dist', '');
+            this.logger.debug(`Migration foler path for ts files : ${tsFolderPath}`);
+            return {
+                jsFolderPath,
+                tsFolderPath,
+            };
+        }
+        catch (error) {
+            this.logger.error('Error getting file paths:', error.message);
+            return {
+                jsFolderPath: null,
+                tsFolderPath: null,
+            };
+        }
     }
     async runMigration(migrationFiles, migrationFolderName) {
         if (!migrationFiles || migrationFiles.length === 0) {
@@ -180,7 +196,8 @@ let MigrationService = MigrationService_1 = class MigrationService {
             return;
         }
         const queryRunner = this.getQueryRunner();
-        const { jsFolderPath, tsFolderPath } = this.getFilePaths(migrationFolderName);
+        console.debug('Migration Folder Name:', migrationFolderName);
+        const { jsFolderPath, tsFolderPath } = this.getMigrationFolderPath(migrationFolderName);
         if (!jsFolderPath || !tsFolderPath) {
             this.logger.error(`Migration file not found in folder: ${migrationFolderName}`);
             return;
@@ -266,7 +283,7 @@ let MigrationService = MigrationService_1 = class MigrationService {
         }
         const queryRunner = this.dataSource.createQueryRunner();
         let currentQueryRunner = queryRunner;
-        const { jsFolderPath, tsFolderPath } = this.getFilePaths(migrationFolder);
+        const { jsFolderPath, tsFolderPath } = this.getMigrationFolderPath(migrationFolder);
         if (!jsFolderPath || !tsFolderPath) {
             this.logger.error(`Migration file not found in folder: ${migrationFolder}`);
             return;

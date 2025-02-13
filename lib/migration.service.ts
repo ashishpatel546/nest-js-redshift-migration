@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { DataSource, Not, QueryRunner } from 'typeorm';
 import fs from 'fs';
 import { readdir } from 'fs/promises';
@@ -209,32 +215,47 @@ export class MigrationService implements OnModuleInit {
     try {
       const cwd = process.cwd();
       const distSrcPath = path.join(cwd, 'dist', 'src');
-      return fs.existsSync(distSrcPath);
+      const isExist = fs.existsSync(distSrcPath);
+      this.logger.debug(`Src folder in dist exist: ${isExist}`);
+      return isExist
     } catch (error) {
       this.logger.error('Error checking src folder in dist:', error.message);
       return false;
     }
   }
 
-  private getFilePaths(filePath: string) {
+  private getMigrationFolderPath(migFolderName: string) {
     const cwd = process.cwd();
-    let basePath = path.join(cwd, 'dist', 'src', filePath);
+    try {
+    let distFolderPath = path.join(cwd, 'dist');
 
     //! if nest js application is not dockerized then we need to replace js with ts as it handles the issue that inside docket it created files under dist folder in some cases, so we can handle is with isDockerized flag
-    const needToReplace = this.checkSrcFolderExistsInDist();
-    const jsFolderPath = needToReplace
-      ? basePath
-      : basePath.replace('js', 'ts');
-    const tsFolderPath = basePath.replace('js', 'ts').replace('/dist', '');
+    const needToAddSrcPath = this.checkSrcFolderExistsInDist();
+    const finaldistFolderPath = needToAddSrcPath
+      ? path.join(distFolderPath, 'src')
+      : path.join(distFolderPath, migFolderName);
+    distFolderPath = finaldistFolderPath;
+    this.logger.debug(`dist folder path: ${distFolderPath}`);
+    const jsFolderPath = path.join(distFolderPath, migFolderName);
+    this.logger.debug(`Migration folder path for js files: ${jsFolderPath}`);
+    const tsFolderPath = jsFolderPath.replace('js', 'ts').replace('/dist', '');
+    this.logger.debug(`Migration foler path for ts files : ${tsFolderPath}`);
     return {
       jsFolderPath,
       tsFolderPath,
     };
+    } catch (error) {
+      this.logger.error('Error getting file paths:', error.message);
+      return {
+        jsFolderPath: null,
+        tsFolderPath: null,
+      };
+    }
   }
 
   private async runMigration(
     migrationFiles: string[],
-    migrationFolderName: string,
+    migrationFolderName: string
   ) {
     if (!migrationFiles || migrationFiles.length === 0) {
       this.logger.log(
@@ -244,9 +265,13 @@ export class MigrationService implements OnModuleInit {
     }
 
     const queryRunner = this.getQueryRunner();
-    const { jsFolderPath, tsFolderPath } = this.getFilePaths(migrationFolderName);
-    if(!jsFolderPath || !tsFolderPath) {
-      this.logger.error(`Migration file not found in folder: ${migrationFolderName}`);
+    console.debug('Migration Folder Name:', migrationFolderName);
+    const { jsFolderPath, tsFolderPath } =
+      this.getMigrationFolderPath(migrationFolderName);
+    if (!jsFolderPath || !tsFolderPath) {
+      this.logger.error(
+        `Migration file not found in folder: ${migrationFolderName}`
+      );
       return;
     }
     await this.assureMigrationTrackingExist();
@@ -274,7 +299,7 @@ export class MigrationService implements OnModuleInit {
             if (typeof migrationInstance.up === 'function') {
               await migrationInstance.up(queryRunner);
               this.logger.log(`Successfully ran migration: ${className}`);
-              
+
               const dbRes = await this.updateMigrationHistory(
                 migrationFolderName,
                 migration,
@@ -354,9 +379,11 @@ export class MigrationService implements OnModuleInit {
     }
     const queryRunner = this.dataSource.createQueryRunner();
     let currentQueryRunner: QueryRunner = queryRunner;
-    const { jsFolderPath, tsFolderPath } = this.getFilePaths(migrationFolder);
-    if(!jsFolderPath || !tsFolderPath) {
-      this.logger.error(`Migration file not found in folder: ${migrationFolder}`);
+    const { jsFolderPath, tsFolderPath } = this.getMigrationFolderPath(migrationFolder);
+    if (!jsFolderPath || !tsFolderPath) {
+      this.logger.error(
+        `Migration file not found in folder: ${migrationFolder}`
+      );
       return;
     }
     const timestamp = parseInt(migration.split('-')[0], 10);
@@ -392,7 +419,10 @@ export class MigrationService implements OnModuleInit {
           await migrationInstance.down(currentQueryRunner);
           this.logger.log(`Successfully reverted migration: ${className}`);
           const migDirKey = `${this.migration_dir_key_prefix}_${migrationFolder}`;
-          const dbRes = await this.deleteFromMigrationHistory(migration, migDirKey);
+          const dbRes = await this.deleteFromMigrationHistory(
+            migration,
+            migDirKey
+          );
           if (dbRes?.msg === StatusOptions.SUCCESS)
             this.logger.log(`Migration track record deleted successfully`);
           else
@@ -409,7 +439,10 @@ export class MigrationService implements OnModuleInit {
     }
   }
 
-  private async deleteFromMigrationHistory(migraion: string, migDirKey: string) {
+  private async deleteFromMigrationHistory(
+    migraion: string,
+    migDirKey: string
+  ) {
     if (!migraion || migraion.length === 0) {
       this.logger.log(
         `No migration file name found to delete from migration track.`
@@ -493,8 +526,6 @@ export class MigrationService implements OnModuleInit {
       description: `Migration ${migration_file_name} reverted successfully`,
     };
   }
-
- 
 
   /**
    * Lifecycle hook that runs when module is initialized

@@ -21,7 +21,7 @@ export declare class MigrationService implements OnModuleInit {
     private uploadMigraionFileOnS3;
     private assureMigrationTrackingExist;
     private checkSrcFolderExistsInDist;
-    private getFilePaths;
+    private getMigrationFolderPath;
     private runMigration;
     private checkDirectoryExist;
     triggerMigration(): Promise<{
