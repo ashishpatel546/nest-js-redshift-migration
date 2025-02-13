@@ -101,10 +101,8 @@ export class MigrationService implements OnModuleInit {
    * @returns Promise<string[]> Array of migration file names
    */
   private async readMigrationFile(migrationFolderName: string) {
-    const cwd = path.resolve(process.cwd());
-    const filePath = path
-      .join(cwd, 'src', migrationFolderName)
-      .replace('/dist', '');
+    const cwd = process.cwd();
+    const filePath = path.join(cwd, 'src', migrationFolderName);
 
     if (!this.checkDirectoryExist(filePath)) {
       this.logger.error(`Migration folder not found at path: ${filePath}`);
@@ -240,7 +238,9 @@ export class MigrationService implements OnModuleInit {
       //   : distFolderPath;
       // distFolderPath = finaldistFolderPath;
       this.logger.debug(`dist folder path: ${distFolderPath}`);
-      const jsFolderPath = distFolderPath.includes(migFolderName) ? distFolderPath  : path.join(distFolderPath, migFolderName);
+      const jsFolderPath = distFolderPath.includes(migFolderName)
+        ? distFolderPath
+        : path.join(distFolderPath, migFolderName);
       this.logger.debug(`Migration folder path for js files: ${jsFolderPath}`);
       const tsFolderPath = jsFolderPath
         .replace('js', 'ts')

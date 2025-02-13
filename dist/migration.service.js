@@ -77,10 +77,8 @@ let MigrationService = MigrationService_1 = class MigrationService {
         }
     }
     async readMigrationFile(migrationFolderName) {
-        const cwd = path_1.default.resolve(process.cwd());
-        const filePath = path_1.default
-            .join(cwd, 'src', migrationFolderName)
-            .replace('/dist', '');
+        const cwd = process.cwd();
+        const filePath = path_1.default.join(cwd, 'src', migrationFolderName);
         if (!this.checkDirectoryExist(filePath)) {
             this.logger.error(`Migration folder not found at path: ${filePath}`);
             return null;
@@ -173,7 +171,9 @@ let MigrationService = MigrationService_1 = class MigrationService {
                 distFolderPath = path_1.default.join(distFolderPath, 'src');
             }
             this.logger.debug(`dist folder path: ${distFolderPath}`);
-            const jsFolderPath = distFolderPath.includes(migFolderName) ? distFolderPath : path_1.default.join(distFolderPath, migFolderName);
+            const jsFolderPath = distFolderPath.includes(migFolderName)
+                ? distFolderPath
+                : path_1.default.join(distFolderPath, migFolderName);
             this.logger.debug(`Migration folder path for js files: ${jsFolderPath}`);
             const tsFolderPath = jsFolderPath
                 .replace('js', 'ts')
