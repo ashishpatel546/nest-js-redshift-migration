@@ -164,18 +164,20 @@ let MigrationService = MigrationService_1 = class MigrationService {
         }
     }
     getMigrationFolderPath(migFolderName) {
-        const cwd = process.cwd();
+        let cwd = process.cwd();
+        this.logger.debug(`Current working directory: ${cwd}`);
         try {
             let distFolderPath = path_1.default.join(cwd, 'dist');
             const needToAddSrcPath = this.checkSrcFolderExistsInDist();
-            const finaldistFolderPath = needToAddSrcPath
-                ? path_1.default.join(distFolderPath, 'src')
-                : path_1.default.join(distFolderPath, migFolderName);
-            distFolderPath = finaldistFolderPath;
+            if (needToAddSrcPath) {
+                distFolderPath = path_1.default.join(distFolderPath, 'src');
+            }
             this.logger.debug(`dist folder path: ${distFolderPath}`);
-            const jsFolderPath = path_1.default.join(distFolderPath, migFolderName);
-            this.logger.debug(`Migration folder path js files: ${jsFolderPath}`);
-            const tsFolderPath = jsFolderPath.replace('js', 'ts').replace('/dist', '');
+            const jsFolderPath = distFolderPath.includes(migFolderName) ? distFolderPath : path_1.default.join(distFolderPath, migFolderName);
+            this.logger.debug(`Migration folder path for js files: ${jsFolderPath}`);
+            const tsFolderPath = jsFolderPath
+                .replace('js', 'ts')
+                .replace('/dist', '');
             this.logger.debug(`Migration foler path for ts files : ${tsFolderPath}`);
             return {
                 jsFolderPath,
@@ -196,7 +198,6 @@ let MigrationService = MigrationService_1 = class MigrationService {
             return;
         }
         const queryRunner = this.getQueryRunner();
-        console.debug('Migration Folder Name:', migrationFolderName);
         const { jsFolderPath, tsFolderPath } = this.getMigrationFolderPath(migrationFolderName);
         if (!jsFolderPath || !tsFolderPath) {
             this.logger.error(`Migration file not found in folder: ${migrationFolderName}`);

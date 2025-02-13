@@ -225,7 +225,7 @@ export class MigrationService implements OnModuleInit {
   }
 
   private getMigrationFolderPath(migFolderName: string) {
-    const cwd = process.cwd();
+    let cwd = process.cwd();
     this.logger.debug(`Current working directory: ${cwd}`);
     try {
       let distFolderPath = path.join(cwd, 'dist');
@@ -240,7 +240,7 @@ export class MigrationService implements OnModuleInit {
       //   : distFolderPath;
       // distFolderPath = finaldistFolderPath;
       this.logger.debug(`dist folder path: ${distFolderPath}`);
-      const jsFolderPath = path.join(distFolderPath, migFolderName);
+      const jsFolderPath = distFolderPath.includes(migFolderName) ? distFolderPath  : path.join(distFolderPath, migFolderName);
       this.logger.debug(`Migration folder path for js files: ${jsFolderPath}`);
       const tsFolderPath = jsFolderPath
         .replace('js', 'ts')
