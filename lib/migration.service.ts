@@ -226,6 +226,7 @@ export class MigrationService implements OnModuleInit {
 
   private getMigrationFolderPath(migFolderName: string) {
     const cwd = process.cwd();
+    this.logger.debug(`Current working directory: ${cwd}`);
     try {
       let distFolderPath = path.join(cwd, 'dist');
 
