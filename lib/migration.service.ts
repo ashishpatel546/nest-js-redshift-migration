@@ -271,7 +271,6 @@ export class MigrationService implements OnModuleInit {
     }
 
     const queryRunner = this.getQueryRunner();
-    console.debug('Migration Folder Name:', migrationFolderName);
     const { jsFolderPath, tsFolderPath } =
       this.getMigrationFolderPath(migrationFolderName);
     if (!jsFolderPath || !tsFolderPath) {
